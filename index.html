@@ -309,10 +309,9 @@ async function buscarAlertasINMET() {
                     alertasComunsTexto += formatoAlerta;
                 }
             }
-        }
-
-        // 5. Injeta os dados se os blocos forem encontrados
-        if (blocoAlertas) {
+    // Executa assim que a página carregar
+window.addEventListener('DOMContentLoaded', buscarAlertasINMET);
+</script>
             blocoAlertas.innerHTML = alertasComunsTexto !== "" ? alertasComunsTexto : `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoUsuario}.`;
         }
         if (blocoGraves) {
