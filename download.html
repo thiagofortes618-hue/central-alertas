@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baixar - Central de Alertas Meteorológicos</title>
+    <style>
+        /* Estilo unificado com o app - Tema Escuro */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            text-align: center;
+        }
+
+        header {
+            padding: 40px 20px;
+            background: linear-gradient(180deg, #1f7a1f 0%, #1a1a1a 100%);
+        }
+
+        .logo-container {
+            font-size: 50px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        p.subtitle {
+            font-size: 1.2rem;
+            color: #cccccc;
+            max-width: 600px;
+            margin: 0 auto 30px auto;
+        }
+
+        /* Botão de Download Estilizado */
+        .btn-download {
+            display: inline-block;
+            background-color: #2b2b2b;
+            color: #ffffff;
+            font-size: 1.3rem;
+            font-weight: bold;
+            padding: 18px 36px;
+            border: 3px solid #ffffff;
+            border-radius: 50px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        .btn-download:hover {
+            background-color: #ffffff;
+            color: #2b2b2b;
+            transform: scale(1.05);
+        }
+
+        /* Seção de Recursos */
+        .container {
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 0 20px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+
+        .feature-box {
+            background-color: #2b2b2b;
+            border: 2px solid #444444;
+            border-radius: 15px;
+            padding: 25px;
+            transition: border-color 0.3s;
+        }
+
+        .feature-box:hover {
+            border-color: #1f7a1f;
+        }
+
+        .feature-box h3 {
+            margin-top: 0;
+            color: #28a745;
+            font-size: 1.3rem;
+        }
+
+        .feature-box p {
+            color: #dddddd;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        footer {
+            margin-top: 80px;
+            padding: 20px;
+            background-color: #111111;
+            color: #777777;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">🚨</div>
+        <h1>Central de Alertas Meteorológicos</h1>
+        <p class="subtitle">Receba avisos severos e relatórios meteorológicos do INMET / GFS em tempo real direto no seu computador.</p>
+        
+        <a href="#" class="btn-download" id="link-exe">📥 BAIXAR PARA WINDOWS (.EXE)</a>
+    </header>
+
+    <div class="container">
+        <h2>Por que instalar o aplicativo desktop?</h2>
+        
+        <div class="features">
+            <div class="feature-box">
+                <h3>📍 Geolocalização por IP</h3>
+                <p>O aplicativo detecta automaticamente a sua região atual ao iniciar, sem que você precise configurar nada manualmente.</p>
+            </div>
+            
+            <div class="feature-box">
+                <h3>🔊 Alertas Sonoros Graves</h3>
+                <p>Avisos críticos de grande perigo acionam sirenes em loop na tela do seu computador para garantir que você veja a emergência a tempo.</p>
+            </div>
+            
+            <div class="feature-box">
+                <h3>📜 Histórico Unificado</h3>
+                <p>Veja a linha do tempo exata com os últimos alertas emitidos pelo painel administrador em perfeita sincronia com a web.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2026 Central de Alertas Meteorológicos. Desenvolvido por Thiago. Todos os direitos reservados.</p>
+    </footer>
+
+</body>
+</html>

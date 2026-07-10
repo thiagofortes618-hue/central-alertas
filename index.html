@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central de Alertas Meteorológicos</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #1f7a1f; 
+            color: white;
+            text-align: center;
+            transition: background-color 0.5s ease;
+        }
+
+        .navbar {
+            max-width: 550px;
+            margin: 0 auto 15px auto;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .navbar a {
+            color: #ffffff;
+            text-decoration: none;
+            background: #2b2b2b;
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 2px solid #ffffff;
+            font-size: 0.9rem;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .navbar a:hover {
+            background-color: #444444;
+        }
+
+        .painel-container {
+            max-width: 550px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .info-linha {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .caixa {
+            background-color: #2b2b2b;
+            border: 2px solid white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            text-align: left;
+        }
+
+        .caixa-titulo {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .caixa-conteudo {
+            font-size: 15px;
+            color: #e0e0e0;
+            white-space: pre-wrap;
+        }
+
+        .texto-mensagem {
+            font-size: 14px;
+            color: #d0d0d0;
+            margin-top: 5px;
+        }
+
+        /* AJUSTE CRITICO DO ANÚNCIO: Casca idêntica à do app */
+        .caixa-anuncio {
+            background-color: #2b2b2b;
+            border: 2px solid white;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            height: 140px; /* Mesma altura definida no main.py */
+            overflow: hidden;
+            position: relative;
+        }
+
+        .caixa-anuncio iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        .rodape {
+            font-size: 14px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body id="corpo-site">
+
+    <div class="painel-container">
+        <div class="navbar">
+            <a href="download.html">📥 Baixar Aplicativo</a>
+        </div>
+
+        <h1>CENTRAL DE ALERTAS METEOROLÓGICOS</h1>
+        
+        <div class="info-linha" id="web-cidade">📍 Localização: Detectando...</div>
+        <div class="info-linha">🟢 Sistema ONLINE</div>
+        <div class="info-linha" id="web-relogio">🕒 --/--/----, --:--:--</div>
+
+        <div class="caixa">
+            <div class="caixa-titulo">⚠️ ALERTAS</div>
+            <div class="caixa-conteudo" id="alerta-texto">Nenhum alerta ativo.</div>
+            <div class="texto-mensagem" id="alerta-mensagem"></div>
+        </div>
+
+        <div class="caixa">
+            <div class="caixa-titulo">🚨 ALERTAS GRAVES</div>
+            <div class="caixa-conteudo" id="grave-texto">Nenhum alerta grave.</div>
+        </div>
+
+        <div class="caixa-anuncio">
+            <iframe src="anuncios.html" title="Espaço Publicitário"></iframe>
+        </div>
+
+        <div class="caixa">
+            <div class="caixa-titulo">📜 HISTÓRICO RECENTE</div>
+            <div class="caixa-conteudo" id="historico-texto">Nenhum registro anterior.</div>
+        </div>
+
+        <div class="rodape">Fonte: INMET / GFS</div>
+        <div class="rodape" id="web-checagem">Última checagem: Conectando...</div>
+    </div>
+
+    <script>
+        const URL_FIREBASE = "https://central-de-alertas-26-default-rtdb.firebaseio.com/.json";
+        
+        let estadoAtual = -1;
+        let historicoAlertas = [];
+
+        function atualizarRelogio() {
+            const agora = new Date();
+            document.getElementById('web-relogio').innerText = "🕒 " + agora.toLocaleString('pt-BR');
+        }
+        setInterval(atualizarRelogio, 1000);
+        atualizarRelogio();
+
+        function detectarLocalizacao() {
+            fetch("http://ip-api.com/json/?fields=status,city,region")
+                .then(res => res.json())
+                .then(dados => {
+                    if (dados.status === "success") {
+                        document.getElementById('web-cidade').innerText = `📍 ${dados.city} - ${dados.region}`;
+                    } else {
+                        document.getElementById('web-cidade').innerText = "📍 Curitiba - PR";
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('web-cidade').innerText = "📍 Curitiba - PR";
+                });
+        }
+        detectarLocalizacao();
+
+        function adicionarAoHistorico(nomeAlerta, hora) {
+            if (!hora || hora === "--:--:--") return;
+            const registro = `🕒 ${hora} - ${nomeAlerta}`;
+            
+            if (historicoAlertas.length > 0 && historicoAlertas[0] === registro) return;
+
+            historicoAlertas.unshift(registro);
+            if (historicoAlertas.length > 3) historicoAlertas.pop();
+
+            document.getElementById('historico-texto').innerText = historicoAlertas.join('\n');
+        }
+
+        function processarMudancaEstado(novoEstado, msgTexto, horarioAlerta) {
+            estadoAtual = novoEstado;
+            const bgBody = document.getElementById('corpo-site');
+            const lblAlerta = document.getElementById('alerta-texto');
+            const lblMensagem = document.getElementById('alerta-mensagem');
+            const lblGrave = document.getElementById('grave-texto');
+
+            if (novoEstado === 0) {
+                bgBody.style.backgroundColor = "#1f7a1f";
+                lblAlerta.innerText = "Nenhum alerta ativo.";
+                lblMensagem.innerText = "";
+                lblGrave.innerText = "Nenhum alerta grave.";
+                adicionarAoHistorico("🟢 Sistema Limpo / Sem Alertas", horarioAlerta);
+
+            } else if (novoEstado === 1) {
+                bgBody.style.backgroundColor = "#d4b000";
+                lblAlerta.innerText = "Central Amarelo (Perigo Potencial)";
+                lblMensagem.innerText = msgTexto;
+                lblGrave.innerText = "Nenhum alerta grave.";
+                adicionarAoHistorico("🟡 Central: Alerta Amarelo", horarioAlerta);
+
+            } else if (novoEstado === 2) {
+                bgBody.style.backgroundColor = "#d46a00";
+                lblAlerta.innerText = "Central Laranja (Perigo)";
+                lblMensagem.innerText = msgTexto;
+                lblGrave.innerText = "Nenhum alerta grave.";
+                adicionarAoHistorico("🟠 Central: Alerta Laranja", horarioAlerta);
+
+            } else if (novoEstado === 3) {
+                bgBody.style.backgroundColor = "#b00000";
+                lblAlerta.innerText = "Central Vermelho (Grande Perigo)";
+                lblMensagem.innerText = msgTexto;
+                lblGrave.innerText = "🚨 ALERTA GRAVE";
+                adicionarAoHistorico("🔴 Central: Alerta Vermelho", horarioAlerta);
+
+            } else if (novoEstado === 4) {
+                bgBody.style.backgroundColor = "#5e2ca5";
+                lblAlerta.innerText = "Central Roxo Severo (Cell Broadcast)";
+                lblMensagem.innerText = msgTexto;
+                lblGrave.innerText = "🚨 ALERTA GRAVE";
+                adicionarAoHistorico("🟣 GFS: Cell Broadcast Severo", horarioAlerta);
+
+            } else if (novoEstado === 5) {
+                bgBody.style.backgroundColor = "#4b0082";
+                lblAlerta.innerText = "Central Roxo Extremo (Cell Broadcast)";
+                lblMensagem.innerText = msgTexto;
+                lblGrave.innerText = "🚨 ALERTA GRAVE";
+                adicionarAoHistorico("🟣 GFS: Cell Broadcast Extremo", horarioAlerta);
+            }
+        }
+
+        function checarAlertasNuvem() {
+            fetch(URL_FIREBASE)
+                .then(res => res.json())
+                .then(dados => {
+                    if (dados && dados.alerta_atual) {
+                        const info = dados.alerta_atual;
+                        const novoEst = info.estado !== undefined ? info.estado : 0;
+                        const msgServidor = info.mensagem || "";
+                        const horaNuvem = info.horario || "--:--:--";
+
+                        if (novoEst !== estadoAtual) {
+                            processarMudancaEstado(novoEst, msgServidor, horaNuvem);
+                        }
+                        document.getElementById('web-checagem').innerText = "Última atualização: " + horaNuvem;
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('web-checagem').innerText = "Aguardando conexão...";
+                });
+        }
+
+        setInterval(checarAlertasNuvem, 3000);
+        checarAlertasNuvem();
+    </script>
+</body>
+</html>
