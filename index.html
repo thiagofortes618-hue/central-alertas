@@ -255,9 +255,59 @@
                     document.getElementById('web-checagem').innerText = "Aguardando conexão...";
                 });
         }
-
+ 
         setInterval(checarAlertasNuvem, 3000);
         checarAlertasNuvem();
     </script>
 </body>
+    <script>
+async function buscarAlertasINMET() {
+    try {
+        const respostaIp = await fetch('https://ipapi.co/json/');
+        if (!respostaIp.ok) throw new Error('Erro ao obter localização');
+        const dadosIp = await respostaIp.json();
+        const estadoUsuario = dadosIp.region_code; 
+        const cidadeUsuario = dadosIp.city;        
+
+        const respostaInmet = await fetch('https://apiprevmet3.inmet.gov.br/aviso/ativo');
+        if (!respostaInmet.ok) throw new Error('Erro ao buscar dados do INMET');
+        const dadosInmet = await respostaInmet.json();
+        
+        const blocoAlertas = document.querySelector('.alertas-comuns') || document.querySelectorAll('.alert-box')[0];
+        const blocoGraves = document.querySelector('.alertas-graves') || document.querySelectorAll('.alert-box')[1];
+        
+        let alertasComunsTexto = "";
+        let alertasGravesTexto = "";
+
+        for (let id in dadosInmet) {
+            const aviso = dadosInmet[id];
+            if (aviso.estados && aviso.estados.includes(estadoUsuario)) {
+                const severidade = aviso.severidade; 
+                const evento = aviso.evento;         
+                const riscos = aviso.riscos || "";
+                
+                const formatoAlerta = `<strong>${evento}</strong> (${severidade})<br><small>${riscos}</small><br><br>`;
+
+                if (severidade.toLowerCase().includes('grande perigo') || severidade.toLowerCase().includes('perigo')) {
+                    alertasGravesTexto += formatoAlerta;
+                } else {
+                    alertasComunsTexto += formatoAlerta;
+                }
+            }
+        }
+
+        if (blocoAlertas) {
+            blocoAlertas.innerHTML = alertasComunsTexto !== "" ? alertasComunsTexto : `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoUsuario}.`;
+        }
+        if (blocoGraves) {
+            blocoGraves.innerHTML = alertasGravesTexto !== "" ? alertasGravesTexto : "Nenhum alerta grave ativo.";
+        }
+
+    } catch (erro) {
+        console.error('Erro INMET:', erro);
+    }
+}
+
+window.addEventListener('DOMContentLoaded', buscarAlertasINMET);
+</script>
 </html>
