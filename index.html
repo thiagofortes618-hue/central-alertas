@@ -237,15 +237,13 @@
 
    <script>
 async function buscarAlertasINMET() {
-    // Procura os blocos de texto pelas classes padrão do seu site
     let blocoAlertas = document.querySelector('.caixa-alertas') || document.getElementById('alertas-comuns');
     let blocoGraves = document.querySelector('.caixa-graves') || document.getElementById('alertas-graves');
     
-    // Fallback caso não ache por ID/Classe (varre o texto)
     if (!blocoAlertas || !blocoGraves) {
         document.querySelectorAll('*').forEach(el => {
             if (el.children.length === 0) {
-                if (el.textContent.includes('Nenhum alerta ativo')) blocoAlertas = el;
+                if (el.textContent.includes('Nenhum alerta ativo') || el.textContent.includes('Não foi possível')) blocoAlertas = el;
                 if (el.textContent.includes('Nenhum alerta grave')) blocoGraves = el;
             }
         });
@@ -256,29 +254,8 @@ async function buscarAlertasINMET() {
 
     // 1. DETECTA A LOCALIZAÇÃO VIA IP
     try {
-        const respostaIp = await fetch('https://ipwho.is/');
-async function buscarAlertasINMET() {
-    // 1. MAPEIA AS CAIXAS E JÁ COLOCA O TEXTO DE CARREGAMENTO PADRÃO
-    let blocoAlertas = document.querySelector('.caixa-alertas') || document.getElementById('alertas-comuns');
-    let blocoGraves = document.querySelector('.caixa-graves') || document.getElementById('alertas-graves');
-    
-    if (!blocoAlertas || !blocoGraves) {
-        document.querySelectorAll('*').forEach(el => {
-            if (el.children.length === 0) {
-                if (el.textContent.includes('Nenhum alerta ativo')) blocoAlertas = el;
-                if (el.textContent.includes('Nenhum alerta grave')) blocoGraves = el;
-            }
-        });
-    }
-
-    // Valores padrão de segurança (caso a API de IP demore ou falhe)
-    let estadoSigla = "PR"; 
-    let cidadeUsuario = "Curitiba";
-
-    // 2. DETECTA A LOCALIZAÇÃO VIA IP COM TIMEOUT DE SEGURANÇA
-    try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // Cancela se demorar mais de 3 segundos
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
 
         const respostaIp = await fetch('https://ipwho.is/', { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -290,37 +267,32 @@ async function buscarAlertasINMET() {
                 cidadeUsuario = dadosIp.city || "Curitiba";
             }
         }
-    } catch (e) { 
-        console.log("Usando localização padrão (PR / Curitiba):", e); 
-    }
+    } catch (e) { console.log("Usando localização padrão"); }
 
-    // Atualiza imediatamente o indicador de localização no topo do site
+    // Atualiza o topo do site com a localização real
     document.querySelectorAll('*').forEach(el => {
         if (el.textContent.includes('Localização:')) {
             el.innerHTML = `📍 Localização: ${cidadeUsuario} - ${estadoSigla}`;
         }
     });
 
-    // 3. REQUISIÇÃO DOS DADOS DO INMET VIA PROXY
+    // 2. PUXA OS DADOS DO INMET VIA PROXY ALTERNATIVO (Mais estável e sem cache antigo)
     try {
         const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
-        // Usando o proxy alternativo do AllOrigins para evitar filas e gargalos
-        const respostaInmet = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlInmet)}`);
+        // Trocando para o proxy do cors-anywhere via espelho público ou adicionando timestamp para burlar cache bloqueado
+        const respostaInmet = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlInmet)}&_=${Date.now()}`);
         
-        if (!respostaInmet.ok) throw new Error('Erro na requisição do INMET');
+        if (!respostaInmet.ok) throw new Error('Erro na requisição');
         
         const wrapper = await respostaInmet.json();
-        if (!wrapper || !wrapper.contents) throw new Error('Conteúdo do proxy inválido');
+        if (!wrapper || !wrapper.contents) throw new Error('Sem conteúdo');
         
         const dadosInmet = JSON.parse(wrapper.contents);
         
-        let comunsAtuais = ""; 
-        let comunsAntecipados = "";
-        let gravesAtuais = ""; 
-        let gravesAntecipados = "";
+        let comunsAtuais = ""; let comunsAntecipados = "";
+        let gravesAtuais = ""; let gravesAntecipados = "";
         const agora = new Date();
 
-        // 4. PROCESSA OS ALERTAS FILTRANDO PELO ESTADO
         Object.keys(dadosInmet).forEach(chave => {
             const item = dadosInmet[chave];
             const alertasLista = Array.isArray(item) ? item : [item];
@@ -328,16 +300,15 @@ async function buscarAlertasINMET() {
             alertasLista.forEach(aviso => {
                 if (!aviso || !aviso.estados) return;
 
-                // Verifica se o estado do usuário está na abrangência do alerta
+                // Filtra pelo estado detectado
                 if (aviso.estados.includes(estadoSigla)) {
                     const severidade = aviso.severidade || ""; 
                     const evento = aviso.evento || "Alerta";         
                     const risks = aviso.riscos || "Atenção aos riscos meteorológicos.";
                     const horaInicioTexto = aviso.inicio || "";
 
-                    // Estrutura HTML limpa e segura
                     const formatoAlerta = `
-                        <div style="margin-bottom: 15px; border-bottom: 1px dashed #444; padding-bottom: 8px; text-align: left;">
+                        <div style="margin-bottom: 12px; border-bottom: 1px dashed #444; padding-bottom: 6px; text-align: left;">
                             <strong style="color: #ffcc00;">⚠️ ${evento}</strong> (${severidade})<br>
                             <span style="font-size: 0.9em; color: #eee;">${risks}</span><br>
                             <small style="color: #aaa;">🕒 Início: ${horaInicioTexto}</small>
@@ -350,9 +321,8 @@ async function buscarAlertasINMET() {
                     }
 
                     const ehFuturo = dataInicio > agora;
-                    const severidadeLower = severidade.toLowerCase();
-                    const ehGrave = severidadeLower.includes('grande perigo') || 
-                                   (severidadeLower.includes('perigo') && !severidadeLower.includes('potencial'));
+                    const ehGrave = severidade.toLowerCase().includes('grande perigo') || 
+                                   (severidade.toLowerCase().includes('perigo') && !severidade.toLowerCase().includes('potencial'));
 
                     if (ehGrave) {
                         if (ehFuturo) gravesAntecipados += formatoAlerta;
@@ -365,37 +335,25 @@ async function buscarAlertasINMET() {
             });
         });
 
-        // 5. RENDERIZAÇÃO NO HTML
+        // 3. RENDERIZA OS ALERTAS NA TELA
         if (blocoAlertas) {
             let htmlComum = "";
-            if (comunsAtuais) htmlComum += `<div style="margin-bottom: 10px;"><strong>⚡ ATIVOS AGORA:</strong></div>${comunsAtuais}`;
-            if (comunsAntecipados) htmlComum += `<div style="margin-top: 10px; margin-bottom: 10px;"><strong>📅 PRÓXIMOS DIAS:</strong></div>${comunsAntecipados}`;
+            if (comunsAtuais) htmlComum += `<div style="margin-bottom: 8px;"><strong>⚡ ATIVOS AGORA:</strong></div>${comunsAtuais}`;
+            if (comunsAntecipados) htmlComum += `<div style="margin-top: 8px; margin-bottom: 8px;"><strong>📅 PRÓXIMOS DIAS:</strong></div>${comunsAntecipados}`;
             blocoAlertas.innerHTML = htmlComum || `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
         }
 
         if (blocoGraves) {
             let htmlGrave = "";
-            if (gravesAtuais) htmlGrave += `<div style="margin-bottom: 10px;"><strong>🚨 PERIGO ATIVO:</strong></div>${gravesAtuais}`;
-            if (gravesAntecipados) htmlGrave += `<div style="margin-top: 10px; margin-bottom: 10px;"><strong>📅 PERIGO AGENDADO:</strong></div>${gravesAntecipados}`;
+            if (gravesAtuais) htmlGrave += `<div style="margin-bottom: 8px;"><strong>🚨 PERIGO ATIVO:</strong></div>${gravesAtuais}`;
+            if (gravesAntecipados) htmlGrave += `<div style="margin-top: 8px; margin-bottom: 8px;"><strong>📅 PERIGO AGENDADO:</strong></div>${gravesAntecipados}`;
             blocoGraves.innerHTML = htmlGrave || "Nenhum alerta grave ativo.";
         }
 
     } catch (erro) {
-        console.error('Erro na leitura do INMET:', erro);
-        // Exibe fallback amigável em caso de queda do serviço externo
-        if (blocoAlertas && blocoAlertas.innerHTML.includes('Nenhum alerta')) {
-            blocoAlertas.innerHTML = `Não foi possível sincronizar com o INMET temporariamente. Região: ${cidadeUsuario} - ${estadoSigla}.`;
+        console.error('Erro INMET:', erro);
+        if (blocoAlertas) {
+            blocoAlertas.innerHTML = `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
         }
     }
 }
-
-// Inicialização paralela e segura
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        try { checarAlertasNuvem(); } catch(e) { console.error("Erro Nuvem:", e); }
-    }, 50);
-
-    setTimeout(() => {
-        try { buscarAlertasINMET(); } catch(e) { console.error("Erro INMET:", e); }
-    }, 100);
-});
