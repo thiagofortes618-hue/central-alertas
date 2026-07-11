@@ -233,62 +233,53 @@
                 lblGrave.innerText = "🚨 ALERTA GRAVE";
                 adicionarAoHistorico("🟣 GFS: Cell Broadcast Extremo", horarioAlerta);
             }
-        }
+        
 
    <script>
-function checarAlertasNuvem() {
-    fetch(URL_FIREBASE)
-        .then(res => res.json())
-        .then(dados => {
-            if (dados && dados.alerta_atual) {
-                const info = dados.alerta_atual;
-                const novoEst = info.estado !== undefined ? info.estado : 0;
-                const msgServidor = info.mensagem || "";
-                const horaNuvem = info.horario || "--:--:--";
-
-                if (novoEst !== estadoAtual) {
-                    processarMudancaEstado(novoEst, msgServidor, horaNuvem);
-                }
-                document.getElementById('web-checagem').innerText = "Última atualização: " + horaNuvem;
-            }
-        })
-        .catch(() => {
-            document.getElementById('web-checagem').innerText = "Aguardando conexão...";
-        });
-}
-<script>
 async function buscarAlertasINMET() {
-    try {
-        // 1. Mapeia onde estão as caixas de texto no seu HTML
-        let blocoAlertas = document.getElementById('alertas-comuns') || document.querySelector('.caixa-alertas');
-        let blocoGraves = document.getElementById('alertas-graves') || document.querySelector('.caixa-graves');
-        
-        if (!blocoAlertas || !blocoGraves) {
-            document.querySelectorAll('*').forEach(el => {
-                if (el.children.length === 0) {
-                    if (el.textContent.includes('Nenhum alerta ativo')) blocoAlertas = el;
-                    if (el.textContent.includes('Nenhum alerta grave')) blocoGraves = el;
-                }
-            });
-        }
-
-        // 2. DETECTA A LOCALIZAÇÃO DO USUÁRIO AUTOMATICAMENTE VIA IP
-        let estadoSigla = "PR"; 
-        let cidadeUsuario = "Curitiba";
-        try {
-            const respostaIp = await fetch('https://ipwho.is/');
-            if (respostaIp.ok) {
-                const dadosIp = await respostaIp.json();
-                if (dadosIp.success) {
-                    estadoSigla = dadosIp.region_code;
-                    cidadeUsuario = dadosIp.city;
-                }
+    // Procura os blocos de texto pelas classes padrão do seu site
+    let blocoAlertas = document.querySelector('.caixa-alertas') || document.getElementById('alertas-comuns');
+    let blocoGraves = document.querySelector('.caixa-graves') || document.getElementById('alertas-graves');
+    
+    // Fallback caso não ache por ID/Classe (varre o texto)
+    if (!blocoAlertas || !blocoGraves) {
+        document.querySelectorAll('*').forEach(el => {
+            if (el.children.length === 0) {
+                if (el.textContent.includes('Nenhum alerta ativo')) blocoAlertas = el;
+                if (el.textContent.includes('Nenhum alerta grave')) blocoGraves = el;
             }
-        } catch (e) { console.log("Usando localização padrão"); }
+        });
+    }
 
-        // 3. Puxa a API do INMET usando o Proxy
+    let estadoSigla = "PR"; 
+    let cidadeUsuario = "Curitiba";
+
+    // 1. DETECTA A LOCALIZAÇÃO VIA IP
+    try {
+        const respostaIp = await fetch('https://ipwho.is/');
+        if (respostaIp.ok) {
+            const dadosIp = await respostaIp.json();
+            if (dadosIp.success) {
+                estadoSigla = dadosIp.region_code;
+                cidadeUsuario = dadosIp.city;
+            }
+        }
+    } catch (e) { 
+        console.log("Usando localização padrão"); 
+    }
+
+    // Atualiza o topo do site com a localização real detectada!
+    document.querySelectorAll('*').forEach(el => {
+        if (el.textContent.includes('Localização:')) {
+            el.innerHTML = `📍 ${cidadeUsuario} - ${estadoSigla}`;
+        }
+    });
+
+    // 2. PUXA OS DADOS DO INMET VIA PROXY
+    try {
         const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
         const respostaInmet = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlInmet)}`);
+        
         if (!respostaInmet.ok) throw new Error('Erro na requisição do INMET');
         
         const wrapper = await respostaInmet.json();
@@ -298,7 +289,6 @@ async function buscarAlertasINMET() {
         let gravesAtuais = ""; let gravesAntecipados = "";
         const agora = new Date();
 
-        // 4. Varre o objeto do INMET procurando alertas para o Estado do usuário
         Object.keys(dadosInmet).forEach(chave => {
             const item = dadosInmet[chave];
             const alertasLista = Array.isArray(item) ? item : [item];
@@ -306,22 +296,25 @@ async function buscarAlertasINMET() {
             alertasLista.forEach(aviso => {
                 if (!aviso || !aviso.estados) return;
 
-                // COMPARAÇÃO: Vê se o Estado do usuário está na lista do alerta
-                const temNoEstado = aviso.estados.includes(estadoSigla);
-                
-                if (temNoEstado) {
+                // Vê se o alerta atinge o Estado do usuário
+                if (aviso.estados.includes(estadoSigla)) {
                     const severidade = aviso.severidade || ""; 
                     const evento = aviso.evento || "Alerta";         
-                    const riscos = aviso.riscos || "Atenção aos riscos meteorológicos na região.";
+                    const risks = aviso.riscos || "";
                     const horaInicioTexto = aviso.inicio || "";
 
-                    // Formato de texto limpo e direto para evitar travas no HTML
-                    const formatoAlerta = `⚠️ ${evento} (${severidade}) - ${riscos} [Início: ${horaInicioTexto}] | `;
+                    // Monta a caixinha do alerta com quebras de linha limpas
+                    const formatoAlerta = `
+                        <div style="margin-bottom: 15px; border-bottom: 1px dashed #444; padding-bottom: 8px;">
+                            <strong style="color: #ffcc00;">⚠️ ${evento}</strong> (${severidade})<br>
+                            <span style="font-size: 0.9em; color: #eee;">${risks}</span><br>
+                            <small style="color: #aaa;">🕒 Início: ${horaInicioTexto}</small>
+                        </div>
+                    `;
                     
                     let dataInicio = new Date();
                     if (horaInicioTexto) {
-                        const partes = horaInicioTexto.replace(/-/g, '/');
-                        dataInicio = new Date(partes);
+                        dataInicio = new Date(horaInicioTexto.replace(/-/g, '/'));
                     }
 
                     const ehFuturo = dataInicio > agora;
@@ -339,27 +332,28 @@ async function buscarAlertasINMET() {
             });
         });
 
-        // Remove a última barra vertical extra (|) se houver texto
-        if (comunsAtuais) comunsAtuais = comunsAtuais.slice(0, -3);
-        if (comunsAntecipados) comunsAntecipados = comunsAntecipados.slice(0, -3);
-        if (gravesAtuais) gravesAtuais = gravesAtuais.slice(0, -3);
-        if (gravesAntecipados) gravesAntecipados = gravesAntecipados.slice(0, -3);
+        // 3. INJETA OS TEXTOS NAS CAIXAS
+        if (blocoAlertas) {
+            let textoComum = "";
+            if (comunsAtuais) textoComum += `<strong>⚡ ATIVOS AGORA:</strong><br>${comunsAtuais}`;
+            if (comunsAntecipados) textoComum += `<br><strong>📅 PRÓXIMOS DIAS:</strong><br>${comunsAntecipados}`;
+            blocoAlertas.innerHTML = textoComum || `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
+        }
 
-        // 5. Monta e exibe os textos formatados nas caixas
-        let textoFinalComuns = "";
-        if (comunsAtuais !== "") textoFinalComuns += "ATIVOS AGORA: " + comunsAtuais + " ";
-        if (comunsAntecipados !== "") textoFinalComuns += "PRÓXIMOS DIAS: " + comunsAntecipados;
-        if (textoFinalComuns === "") textoFinalComuns = `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
-
-        let textoFinalGraves = "";
-        if (gravesAtuais !== "") textoFinalGraves += "PERIGO ATIVO: " + gravesAtuais + " ";
-        if (gravesAntecipados !== "") textoFinalGraves += "PERIGO AGENDADO: " + gravesAntecipados;
-        if (textoFinalGraves === "") textoFinalGraves = "Nenhum alerta grave ativo.";
-
-        if (blocoAlertas) blocoAlertas.textContent = textoFinalComuns;
-        if (blocoGraves) blocoGraves.textContent = textoFinalGraves;
+        if (blocoGraves) {
+            let textoGrave = "";
+            if (gravesAtuais) textoGrave += `<strong>🚨 PERIGO ATIVO:</strong><br>${gravesAtuais}`;
+            if (gravesAntecipados) textoGrave += `<br><strong>📅 PERIGO AGENDADO:</strong><br>${gravesAntecipados}`;
+            blocoGraves.innerHTML = textoGrave || "Nenhum alerta grave ativo.";
+        }
 
     } catch (erro) {
         console.error('Erro na leitura do INMET:', erro);
     }
 }
+
+// Executa as duas funções de forma SEPARADA para uma não travar a outra!
+window.addEventListener('DOMContentLoaded', () => {
+    try { checarAlertasNuvem(); } catch(e) { console.error(e); }
+    try { buscarAlertasINMET(); } catch(e) { console.error(e); }
+});
