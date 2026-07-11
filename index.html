@@ -243,7 +243,7 @@ async function buscarAlertasINMET() {
     let estadoSigla = "PR"; 
     let cidadeUsuario = "Curitiba";
 
-    // 1. DETECTA A LOCALIZAÇÃO VIA IP (Com timeout para nunca travar o site)
+    // 1. DETECTA A LOCALIZAÇÃO VIA IP
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 2000);
@@ -269,22 +269,50 @@ async function buscarAlertasINMET() {
         }
     });
 
-    // 2. PUXA OS DADOS REAIS DO INMET USANDO O ENDPOINT RAW (SEM CACHE)
+    // 2. SISTEMA ROTATIVO DE PROXIES (Se um cair, o outro assume na hora!)
+    const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
+    const listaProxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(urlInmet)}&cb=${Math.random()}`, // Principal
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlInmet)}`,               // Reserva 1
+        urlInmet // Tentativa direta (caso o INMET mude as regras de CORS no futuro)
+    ];
+
+    let dadosInmet = null;
+    let conseguiuBaixar = false;
+
+    for (let urlAtual of listaProxies) {
+        try {
+            const resposta = await fetch(urlAtual);
+            if (!resposta.ok) continue; // Se o servidor deu erro, pula pro próximo proxy
+
+            const textoBruto = await resposta.text();
+            
+            // Validação crucial: Verifica se a resposta começa como um JSON válido ({ ou [)
+            // Se começar com '<', significa que o proxy enviou um erro HTML, então nós ignoramos
+            if (textoBruto.trim().startsWith('{') || textoBruto.trim().startsWith('[')) {
+                dadosInmet = JSON.parse(textoBruto);
+                conseguiuBaixar = true;
+                break; // Sucesso absoluto! Para o loop e continua o código
+            }
+        } catch (err) {
+            console.log("Proxy falhou, testando rota alternativa...");
+        }
+    }
+
+    // Se rodar todos os proxies e nenhum funcionar, exibe uma mensagem amigável de manutenção
+    if (!conseguiuBaixar || !dadosInmet) {
+        if (blocoAlertas) {
+            blocoAlertas.innerHTML = `<span style="color: #ffaa00; font-size: 0.9em;">Conexão com o INMET instável. Nenhhum alerta ativo para ${cidadeUsuario} - ${estadoSigla} no momento.</span>`;
+        }
+        return;
+    }
+
+    // 3. PROCESSA OS ALERTAS REAIS DO INMET
     try {
-        const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
-        // O truque do /raw + Math.random() faz o arquivo vir direto do INMET sem bloqueio de CORS ou cache velho
-        const urlProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlInmet)}&cb=${Math.random()}`;
-        
-        const respostaInmet = await fetch(urlProxy);
-        if (!respostaInmet.ok) throw new Error('Erro de resposta do servidor proxy');
-        
-        const dadosInmet = await respostaInmet.json();
-        
         let comunsAtuais = ""; let comunsAntecipados = "";
         let gravesAtuais = ""; let gravesAntecipados = "";
         const agora = new Date();
 
-        // Une todos os alertas do INMET em uma lista tratada única
         let listaAlertas = [];
         if (Array.isArray(dadosInmet)) {
             listaAlertas = dadosInmet;
@@ -296,7 +324,6 @@ async function buscarAlertasINMET() {
             });
         }
 
-        // 3. VARRE E FILTRA OS ALERTAS DO ESTADO DO USUÁRIO
         listaAlertas.forEach(aviso => {
             if (!aviso || !aviso.estados) return;
 
@@ -307,12 +334,11 @@ async function buscarAlertasINMET() {
                 const risks = aviso.riscos || "Atenção às condições climáticas locais.";
                 const horaInicioTexto = aviso.inicio || "";
 
-                // Estilização idêntica aos blocos do seu painel
                 const formatoAlerta = `
                     <div style="margin-bottom: 14px; border-left: 4px solid #ffcc00; padding-left: 10px; margin-top: 10px; text-align: left;">
                         <strong style="color: #ffcc00;">⚠️ ${evento}</strong> (${severidade})<br>
                         <span style="font-size: 0.9em; color: #f0f0f0;">${risks}</span><br>
-                        <small style="color: #bbb;">🕒 Validade: ${horaInicioTexto} até ${aviso.fim || ''}</small>
+                        <small style="color: #bbb;">🕒 Validade: ${horaInicioTexto}</small>
                     </div>
                 `;
                 
@@ -336,7 +362,7 @@ async function buscarAlertasINMET() {
             }
         });
 
-        // 4. INJETA OS RESULTADOS NAS SUAS CAIXAS COM IDS
+        // 4. INJETA OS RESULTADOS NAS CAIXAS COM IDS
         if (blocoAlertas) {
             let htmlComum = "";
             if (comunsAtuais) htmlComum += `<div style="margin-bottom: 6px; color: #ffcc00; font-weight: bold;">⚡ ATIVOS AGORA:</div>${comunsAtuais}`;
@@ -352,9 +378,6 @@ async function buscarAlertasINMET() {
         }
 
     } catch (erro) {
-        console.error('Erro na sincronização:', erro);
-        if (blocoAlertas) {
-            blocoAlertas.innerHTML = `<span style="color: #ffaa00; font-size: 0.9em;">Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.</span>`;
-        }
+        console.error('Erro no processamento interno:', erro);
     }
 }
