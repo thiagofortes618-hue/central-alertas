@@ -243,10 +243,10 @@ async function buscarAlertasINMET() {
     let estadoSigla = "PR"; 
     let cidadeUsuario = "Curitiba";
 
-    // 1. DETECTA A LOCALIZAÇÃO VIA IP
+    // 1. DETECTA A LOCALIZAÇÃO VIA IP (Com timeout para nunca travar o site)
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
 
         const respostaIp = await fetch('https://ipwho.is/', { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -259,23 +259,24 @@ async function buscarAlertasINMET() {
             }
         }
     } catch (e) { 
-        console.log("Usando localização padrão de segurança"); 
+        console.log("Usando localização padrão (PR)"); 
     }
 
-    // Atualiza o topo do site com a localização real detectada
+    // Atualiza o topo do seu painel imediatamente
     document.querySelectorAll('*').forEach(el => {
         if (el.textContent.includes('Localização:')) {
             el.innerHTML = `📍 Localização: ${cidadeUsuario} - ${estadoSigla}`;
         }
     });
 
-    // 2. PUXA OS DADOS DO INMET VIA PROXY ESTÁVEL (corsproxy.io)
+    // 2. PUXA OS DADOS REAIS DO INMET USANDO O ENDPOINT RAW (SEM CACHE)
     try {
         const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
-        // O corsproxy.io entrega o JSON direto, sem precisar de wrapper.contents
-        const respostaInmet = await fetch(`https://corsproxy.io/?${encodeURIComponent(urlInmet)}`);
+        // O truque do /raw + Math.random() faz o arquivo vir direto do INMET sem bloqueio de CORS ou cache velho
+        const urlProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlInmet)}&cb=${Math.random()}`;
         
-        if (!respostaInmet.ok) throw new Error('Falha na resposta do servidor proxy');
+        const respostaInmet = await fetch(urlProxy);
+        if (!respostaInmet.ok) throw new Error('Erro de resposta do servidor proxy');
         
         const dadosInmet = await respostaInmet.json();
         
@@ -283,7 +284,7 @@ async function buscarAlertasINMET() {
         let gravesAtuais = ""; let gravesAntecipados = "";
         const agora = new Date();
 
-        // Normaliza os dados para uma lista única (previne erros se o INMET mandar Array ou Objeto)
+        // Une todos os alertas do INMET em uma lista tratada única
         let listaAlertas = [];
         if (Array.isArray(dadosInmet)) {
             listaAlertas = dadosInmet;
@@ -295,22 +296,23 @@ async function buscarAlertasINMET() {
             });
         }
 
-        // Varre os alertas procurando o Estado do usuário
+        // 3. VARRE E FILTRA OS ALERTAS DO ESTADO DO USUÁRIO
         listaAlertas.forEach(aviso => {
             if (!aviso || !aviso.estados) return;
 
             const estadosAviso = String(aviso.estados).toUpperCase();
             if (estadosAviso.includes(estadoSigla)) {
                 const severidade = aviso.severidade || ""; 
-                const evento = aviso.evento || "Alerta";         
-                const risks = aviso.riscos || "Atenção aos riscos meteorológicos.";
+                const evento = aviso.evento || "Alerta Meteorológico";         
+                const risks = aviso.riscos || "Atenção às condições climáticas locais.";
                 const horaInicioTexto = aviso.inicio || "";
 
+                // Estilização idêntica aos blocos do seu painel
                 const formatoAlerta = `
-                    <div style="margin-bottom: 12px; border-left: 4px solid #ffcc00; padding-left: 8px; margin-top: 10px; text-align: left;">
+                    <div style="margin-bottom: 14px; border-left: 4px solid #ffcc00; padding-left: 10px; margin-top: 10px; text-align: left;">
                         <strong style="color: #ffcc00;">⚠️ ${evento}</strong> (${severidade})<br>
-                        <span style="font-size: 0.9em; color: #eee;">${risks}</span><br>
-                        <small style="color: #aaa;">🕒 Início: ${horaInicioTexto}</small>
+                        <span style="font-size: 0.9em; color: #f0f0f0;">${risks}</span><br>
+                        <small style="color: #bbb;">🕒 Validade: ${horaInicioTexto} até ${aviso.fim || ''}</small>
                     </div>
                 `;
                 
@@ -324,36 +326,35 @@ async function buscarAlertasINMET() {
                 const ehGrave = severidadeLower.includes('grande perigo') || 
                                (severidadeLower.includes('perigo') && !severidadeLower.includes('potencial'));
 
-                    if (ehGrave) {
-                        if (ehFuturo) gravesAntecipados += formatoAlerta;
-                        else gravesAtuais += formatoAlerta;
-                    } else {
-                        if (ehFuturo) comunsAntecipados += formatoAlerta;
-                        else comunsAtuais += formatoAlerta;
-                    }
+                if (ehGrave) {
+                    if (ehFuturo) gravesAntecipados += formatoAlerta;
+                    else gravesAtuais += formatoAlerta;
+                } else {
+                    if (ehFuturo) comunsAntecipados += formatoAlerta;
+                    else comunsAtuais += formatoAlerta;
                 }
-            });
+            }
+        });
 
-        // 3. RENDERIZA OS ALERTAS NA TELA
+        // 4. INJETA OS RESULTADOS NAS SUAS CAIXAS COM IDS
         if (blocoAlertas) {
             let htmlComum = "";
-            if (comunsAtuais) htmlComum += `<div style="margin-bottom: 8px; color: #ffcc00;"><strong>⚡ ATIVOS AGORA:</strong></div>${comunsAtuais}`;
-            if (comunsAntecipados) htmlComum += `<div style="margin-top: 12px; margin-bottom: 8px; color: #00ccff;"><strong>📅 PRÓXIMOS DIAS:</strong></div>${comunsAntecipados}`;
+            if (comunsAtuais) htmlComum += `<div style="margin-bottom: 6px; color: #ffcc00; font-weight: bold;">⚡ ATIVOS AGORA:</div>${comunsAtuais}`;
+            if (comunsAntecipados) htmlComum += `<div style="margin-top: 10px; margin-bottom: 6px; color: #00ccff; font-weight: bold;">📅 PRÓXIMOS DIAS:</div>${comunsAntecipados}`;
             blocoAlertas.innerHTML = htmlComum || `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
         }
 
         if (blocoGraves) {
             let htmlGrave = "";
-            if (gravesAtuais) htmlGrave += `<div style="margin-bottom: 8px; color: #ff3333;"><strong>🚨 PERIGO ATIVO:</strong></div>${gravesAtuais}`;
-            if (gravesAntecipados) htmlGrave += `<div style="margin-top: 12px; margin-bottom: 8px; color: #ff9999;"><strong>📅 PERIGO AGENDADO:</strong></div>${gravesAntecipados}`;
+            if (gravesAtuais) htmlGrave += `<div style="margin-bottom: 6px; color: #ff3333; font-weight: bold;">🚨 PERIGO ATIVO:</div>${gravesAtuais}`;
+            if (gravesAntecipados) htmlGrave += `<div style="margin-top: 10px; margin-bottom: 6px; color: #ff9999; font-weight: bold;">📅 PERIGO AGENDADO:</div>${gravesAntecipados}`;
             blocoGraves.innerHTML = htmlGrave || "Nenhum alerta grave ativo.";
         }
 
     } catch (erro) {
-        console.error('Erro na API do INMET:', erro);
-        // Se quebrar, agora ele avisa claramente em vez de mascarar o erro
+        console.error('Erro na sincronização:', erro);
         if (blocoAlertas) {
-            blocoAlertas.innerHTML = `<span style="color: #ff3333; font-size: 0.9em;">⚠️ Erro de conexão com o INMET. Tentando restabelecer...</span>`;
+            blocoAlertas.innerHTML = `<span style="color: #ffaa00; font-size: 0.9em;">Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.</span>`;
         }
     }
 }
