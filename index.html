@@ -347,7 +347,7 @@ async function buscarAlertasINMET() {
         // 6. Monta o texto final com títulos divisores para Alertas Graves
         let textoFinalGraves = "";
         if (gravesAtuais !== "") {
-            gravesFinalGraves += `<span style="color: #ff3333; font-weight: bold; display: block; margin-bottom: 8px;">🚨 PERIGO - ATIVOS AGORA:</span>` + gravesAtuais;
+            textoFinalGraves += `<span style="color: #ff3333; font-weight: bold; display: block; margin-bottom: 8px;">🚨 PERIGO - ATIVOS AGORA:</span>` + gravesAtuais;
         }
         if (gravesAntecipados !== "") {
             textoFinalGraves += `<span style="color: #ff9999; font-weight: bold; display: block; margin-top: 10px; margin-bottom: 8px;">📅 PERIGO - ANTECIPADOS (PRÓXIMOS DIAS):</span>` + gravesAntecipados;
