@@ -256,69 +256,6 @@
                 });
         }
 
-        <script>
-async function buscarAlertasINMET() {
-    try {
-        // 1. Pega a localização atual por IP (via ipwho.is)
-        const respostaIp = await fetch('https://ipwho.is/');
-        if (!respostaIp.ok) throw new Error('Erro ao obter localização');
-        const dadosIp = await respostaIp.json();
-        
-        const estadoUsuario = dadosIp.success ? dadosIp.region_code : "PR"; 
-        const cidadeUsuario = dadosIp.success ? dadosIp.city : "Curitiba";        
-
-        // 2. Puxa os avisos ativos do INMET
-        const respostaInmet = await fetch('https://apiprevmet3.inmet.gov.br/aviso/ativo');
-        if (!respostaInmet.ok) throw new Error('Erro ao buscar dados do INMET');
-        const dadosInmet = await respostaInmet.json();
-        
-        // 3. Procura na página por elementos que contenham o texto de alerta
-        let blocoAlertas = null;
-        let blocoGraves = null;
-        
-        const todosOsDivs = document.querySelectorAll('div');
-        let encontrados = [];
-        
-        todosOsDivs.forEach(div => {
-            if (div.textContent.includes('Nenhum alerta ativo') || div.className.includes('alert')) {
-                if (div.children.length <= 2) {
-                    encontrados.push(div);
-                }
-            }
-        });
-
-        blocoAlertas = encontrados[0] || document.querySelector('.alertas-comuns');
-        blocoGraves = encontrados[1] || document.querySelector('.alertas-graves');
-        
-        let alertasComunsTexto = "";
-        let alertasGravesTexto = "";
-
-        // 4. Filtra e monta os alertas para o estado do usuário
-        for (let id in dadosInmet) {
-            const aviso = dadosInmet[id];
-            if (aviso.estados && aviso.estados.includes(estadoUsuario)) {
-                const severidade = aviso.severidade; 
-                const evento = aviso.evento;         
-                const riscos = aviso.riscos || "";
-                
-                const formatoAlerta = `<strong>${evento}</strong> (${severidade})<br><small>${riscos}</small><br><br>`;
-
-                if (severidade.toLowerCase().includes('grande perigo') || severidade.toLowerCase().includes('perigo')) {
-                    alertasGravesTexto += formatoAlerta;
-                } else {
-                    alertasComunsTexto += formatoAlerta;
-                }
-            }
-    // Executa assim que a página carregar
-window.addEventListener('DOMContentLoaded', buscarAlertasINMET);
-</script>
-            blocoAlertas.innerHTML = alertasComunsTexto !== "" ? alertasComunsTexto : `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoUsuario}.`;
-        }
-        if (blocoGraves) {
-            blocoGraves.innerHTML = alertasGravesTexto !== "" ? alertasGravesTexto : "Nenhum alerta grave ativo.";
-        }
-
-    } catch (erro) {
         console.error('Erro na integração do INMET:', erro);
     }
 }
