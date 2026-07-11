@@ -261,24 +261,16 @@ async function buscarAlertasINMET() {
 // 1. SCRIPT DO RELÓGIO EM TEMPO REAL
 // ==========================================
 function iniciarRelogio() {
-    const elementoRelogio = document.getElementById('relogio');
+    const elementoRelogio = document.getElementById('relogio-topo');
     
     function atualizar() {
         const agora = new Date();
         const hora = String(agora.getHours()).padStart(2, '0');
         const minuto = String(agora.getMinutes()).padStart(2, '0');
         const segundo = String(agora.getSeconds()).padStart(2, '0');
-        const hora Formatada = `${hora}:${minuto}:${segundo}`;
         
         if (elementoRelogio) {
-            elementoRelogio.textContent = horaFormatada;
-        } else {
-            // Fallback caso não ache o ID: varre o texto da tela
-            document.querySelectorAll('*').forEach(el => {
-                if (el.children.length === 0 && el.textContent.includes('Horário:')) {
-                    el.innerHTML = `🕒 Horário: ${horaFormatada}`;
-                }
-            });
+            elementoRelogio.textContent = `${hora}:${minuto}:${segundo}`;
         }
     }
     atualizar();
@@ -291,7 +283,9 @@ function iniciarRelogio() {
 async function buscarAlertasINMET() {
     let blocoAlertas = document.getElementById('alertas-comuns') || document.querySelector('.caixa-alertas');
     let blocoGraves = document.getElementById('alertas-graves') || document.querySelector('.caixa-graves');
-    let elementoAtualizacao = document.getElementById('ultima-atualizacao');
+    
+    let elementoLocalizacao = document.getElementById('localizacao-topo');
+    let elementoAtualizacao = document.getElementById('atualizacao-topo');
     
     let estadoSigla = "PR"; 
     let cidadeUsuario = "Curitiba";
@@ -310,16 +304,16 @@ async function buscarAlertasINMET() {
                 cidadeUsuario = dadosIp.city || "Curitiba";
             }
         }
-    } catch (e) { console.log("Usando localização padrão"); }
+    } catch (e) { 
+        console.log("Usando localização padrão de segurança"); 
+    }
 
-    // Atualiza o topo com a localização
-    document.querySelectorAll('*').forEach(el => {
-        if (el.textContent.includes('Localização:')) {
-            el.innerHTML = `📍 Localização: ${cidadeUsuario} - ${estadoSigla}`;
-        }
-    });
+    // Atualiza o topo com a localização usando seu ID exato
+    if (elementoLocalizacao) {
+        elementoLocalizacao.innerHTML = `📍 Localização: ${cidadeUsuario} - ${estadoSigla}`;
+    }
 
-    // Sistema Inteligente de Proxies (Decodifica tanto formato RAW quanto formato Wrapper)
+    // Sistema Inteligente de Proxies (Rotativo e antiqueda)
     const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
     const listaProxies = [
         `https://api.allorigins.win/raw?url=${encodeURIComponent(urlInmet)}&cb=${Math.random()}`,
@@ -339,16 +333,16 @@ async function buscarAlertasINMET() {
 
             const objetoJson = JSON.parse(textoBruto);
             
-            // Se o proxy usou o formato de wrapper (allorigins standard), extrai o conteúdo de dentro dele
+            // Trata se o proxy encapsulou o JSON dentro de .contents
             if (objetoJson && objetoJson.contents) {
                 dadosInmet = JSON.parse(objetoJson.contents);
             } else {
                 dadosInmet = objetoJson;
             }
             
-            if (dadosInmet) break; // Sucesso! Sai do loop de proxies
+            if (dadosInmet) break; 
         } catch (err) {
-            console.log("Tentando rota alternativa de conexão...");
+            console.log("Testando rota alternativa de conexão...");
         }
     }
 
@@ -360,22 +354,16 @@ async function buscarAlertasINMET() {
         return;
     }
 
-    // Se chegou até aqui, os dados foram baixados com sucesso! Atualiza o carimbo de "Última Atualização"
+    // Se o download deu certo, atualiza o carimbo de "Última Atualização" no seu ID correto
     const agora = new Date();
     const dataTxt = agora.toLocaleDateString('pt-BR');
     const horaTxt = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
     if (elementoAtualizacao) {
         elementoAtualizacao.textContent = `${dataTxt} às ${horaTxt}`;
-    } else {
-        document.querySelectorAll('*').forEach(el => {
-            if (el.children.length === 0 && (el.textContent.includes('Última atualização:') || el.textContent.includes('Atualizado em:'))) {
-                el.innerHTML = `🔄 Última Atualização: ${dataTxt} às ${horaTxt}`;
-            }
-        });
     }
 
-    // Processamento dos alertas do Estado
+    // Processamento e filtragem dos alertas do INMET
     try {
         let comunsAtuais = ""; let comunsAntecipados = "";
         let gravesAtuais = ""; let gravesAntecipados = "";
@@ -429,7 +417,7 @@ async function buscarAlertasINMET() {
             }
         });
 
-        // Injeta os blocos finais nas caixas de texto
+        // Injeta os blocos finais nas suas caixas pretas de alertas
         if (blocoAlertas) {
             let htmlComum = "";
             if (comunsAtuais) htmlComum += `<div style="margin-bottom: 6px; color: #ffcc00; font-weight: bold;">⚡ ATIVOS AGORA:</div>${comunsAtuais}`;
@@ -445,13 +433,13 @@ async function buscarAlertasINMET() {
         }
 
     } catch (erro) {
-        console.error('Erro de renderização:', erro);
+        console.error('Erro de renderização do INMET:', erro);
     }
 }
 
-// Inicialização segura das rotinas do painel
+// Inicialização automatizada ao carregar a página
 window.addEventListener('DOMContentLoaded', () => {
-    iniciarRelogio(); // Dispara o relógio imediatamente de forma independente
+    iniciarRelogio(); // Dispara o relógio de forma 100% independente
     
     setTimeout(() => {
         try { checarAlertasNuvem(); } catch(e) { console.error("Erro Nuvem:", e); }
