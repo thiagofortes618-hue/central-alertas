@@ -237,18 +237,9 @@
 
    <script>
 async function buscarAlertasINMET() {
-    let blocoAlertas = document.querySelector('.caixa-alertas') || document.getElementById('alertas-comuns');
-    let blocoGraves = document.querySelector('.caixa-graves') || document.getElementById('alertas-graves');
+    let blocoAlertas = document.getElementById('alertas-comuns') || document.querySelector('.caixa-alertas');
+    let blocoGraves = document.getElementById('alertas-graves') || document.querySelector('.caixa-graves');
     
-    if (!blocoAlertas || !blocoGraves) {
-        document.querySelectorAll('*').forEach(el => {
-            if (el.children.length === 0) {
-                if (el.textContent.includes('Nenhum alerta ativo') || el.textContent.includes('Não foi possível')) blocoAlertas = el;
-                if (el.textContent.includes('Nenhum alerta grave')) blocoGraves = el;
-            }
-        });
-    }
-
     let estadoSigla = "PR"; 
     let cidadeUsuario = "Curitiba";
 
@@ -263,70 +254,75 @@ async function buscarAlertasINMET() {
         if (respostaIp.ok) {
             const dadosIp = await respostaIp.json();
             if (dadosIp.success) {
-                // Força a sigla a ficar em MAIÚSCULO para bater com o INMET
                 estadoSigla = (dadosIp.region_code || "PR").toUpperCase();
                 cidadeUsuario = dadosIp.city || "Curitiba";
             }
         }
-    } catch (e) { console.log("Usando localização padrão"); }
+    } catch (e) { 
+        console.log("Usando localização padrão de segurança"); 
+    }
 
-    // Atualiza o topo do site com a localização real
+    // Atualiza o topo do site com a localização real detectada
     document.querySelectorAll('*').forEach(el => {
         if (el.textContent.includes('Localização:')) {
             el.innerHTML = `📍 Localização: ${cidadeUsuario} - ${estadoSigla}`;
         }
     });
 
-    // 2. PUXA OS DADOS DO INMET VIA PROXY
+    // 2. PUXA OS DADOS DO INMET VIA PROXY ESTÁVEL (corsproxy.io)
     try {
         const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
-        const respostaInmet = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlInmet)}&_=${Date.now()}`);
+        // O corsproxy.io entrega o JSON direto, sem precisar de wrapper.contents
+        const respostaInmet = await fetch(`https://corsproxy.io/?${encodeURIComponent(urlInmet)}`);
         
-        if (!respostaInmet.ok) throw new Error('Erro na requisição');
+        if (!respostaInmet.ok) throw new Error('Falha na resposta do servidor proxy');
         
-        const wrapper = await respostaInmet.json();
-        if (!wrapper || !wrapper.contents) throw new Error('Sem conteúdo');
-        
-        const dadosInmet = JSON.parse(wrapper.contents);
+        const dadosInmet = await respostaInmet.json();
         
         let comunsAtuais = ""; let comunsAntecipados = "";
         let gravesAtuais = ""; let gravesAntecipados = "";
         const agora = new Date();
 
-        Object.keys(dadosInmet).forEach(chave => {
-            const item = dadosInmet[chave];
-            const alertasLista = Array.isArray(item) ? item : [item];
+        // Normaliza os dados para uma lista única (previne erros se o INMET mandar Array ou Objeto)
+        let listaAlertas = [];
+        if (Array.isArray(dadosInmet)) {
+            listaAlertas = dadosInmet;
+        } else if (dadosInmet && typeof dadosInmet === 'object') {
+            Object.keys(dadosInmet).forEach(chave => {
+                const item = dadosInmet[chave];
+                if (Array.isArray(item)) listaAlertas.push(...item);
+                else listaAlertas.push(item);
+            });
+        }
 
-            alertasLista.forEach(aviso => {
-                if (!aviso || !aviso.estados) return;
+        // Varre os alertas procurando o Estado do usuário
+        listaAlertas.forEach(aviso => {
+            if (!aviso || !aviso.estados) return;
 
-                // Transforma a lista de estados do INMET em maiúsculo para comparar sem erros
-                const estadosAviso = aviso.estados.toUpperCase();
-                const temNoEstado = estadosAviso.includes(estadoSigla);
+            const estadosAviso = String(aviso.estados).toUpperCase();
+            if (estadosAviso.includes(estadoSigla)) {
+                const severidade = aviso.severidade || ""; 
+                const evento = aviso.evento || "Alerta";         
+                const risks = aviso.riscos || "Atenção aos riscos meteorológicos.";
+                const horaInicioTexto = aviso.inicio || "";
+
+                const formatoAlerta = `
+                    <div style="margin-bottom: 12px; border-left: 4px solid #ffcc00; padding-left: 8px; margin-top: 10px; text-align: left;">
+                        <strong style="color: #ffcc00;">⚠️ ${evento}</strong> (${severidade})<br>
+                        <span style="font-size: 0.9em; color: #eee;">${risks}</span><br>
+                        <small style="color: #aaa;">🕒 Início: ${horaInicioTexto}</small>
+                    </div>
+                `;
                 
-                if (temNoEstado) {
-                    const severidade = aviso.severidade || ""; 
-                    const evento = aviso.evento || "Alerta";         
-                    const risks = aviso.riscos || "Atenção aos riscos meteorológicos.";
-                    const horaInicioTexto = aviso.inicio || "";
+                let dataInicio = new Date();
+                if (horaInicioTexto) {
+                    dataInicio = new Date(horaInicioTexto.replace(/-/g, '/'));
+                }
 
-                    const formatoAlerta = `
-                        <div style="margin-bottom: 12px; border-bottom: 1px dashed #444; padding-bottom: 6px; text-align: left;">
-                            <strong style="color: #ffcc00;">⚠️ ${evento}</strong> (${severidade})<br>
-                            <span style="font-size: 0.9em; color: #eee;">${risks}</span><br>
-                            <small style="color: #aaa;">🕒 Início: ${horaInicioTexto}</small>
-                        </div>
-                    `;
-                    
-                    let dataInicio = new Date();
-                    if (horaInicioTexto) {
-                        dataInicio = new Date(horaInicioTexto.replace(/-/g, '/'));
-                    }
-
-                    const ehFuturo = dataInicio > agora;
-                    const severidadeLower = severidade.toLowerCase();
-                    const ehGrave = severidadeLower.includes('grande perigo') || 
-                                   (severidadeLower.includes('perigo') && !severidadeLower.includes('potencial'));
+                const ehFuturo = dataInicio > agora;
+                const severidadeLower = severidade.toLowerCase();
+                const ehGrave = severidadeLower.includes('grande perigo') || 
+                               (severidadeLower.includes('perigo') && !severidadeLower.includes('potencial'));
 
                     if (ehGrave) {
                         if (ehFuturo) gravesAntecipados += formatoAlerta;
@@ -337,27 +333,27 @@ async function buscarAlertasINMET() {
                     }
                 }
             });
-        });
 
         // 3. RENDERIZA OS ALERTAS NA TELA
         if (blocoAlertas) {
             let htmlComum = "";
-            if (comunsAtuais) htmlComum += `<div style="margin-bottom: 8px;"><strong>⚡ ATIVOS AGORA:</strong></div>${comunsAtuais}`;
-            if (comunsAntecipados) htmlComum += `<div style="margin-top: 8px; margin-bottom: 8px;"><strong>📅 PRÓXIMOS DIAS:</strong></div>${comunsAntecipados}`;
+            if (comunsAtuais) htmlComum += `<div style="margin-bottom: 8px; color: #ffcc00;"><strong>⚡ ATIVOS AGORA:</strong></div>${comunsAtuais}`;
+            if (comunsAntecipados) htmlComum += `<div style="margin-top: 12px; margin-bottom: 8px; color: #00ccff;"><strong>📅 PRÓXIMOS DIAS:</strong></div>${comunsAntecipados}`;
             blocoAlertas.innerHTML = htmlComum || `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
         }
 
         if (blocoGraves) {
             let htmlGrave = "";
-            if (gravesAtuais) htmlGrave += `<div style="margin-bottom: 8px;"><strong>🚨 PERIGO ATIVO:</strong></div>${gravesAtuais}`;
-            if (gravesAntecipados) htmlGrave += `<div style="margin-top: 8px; margin-bottom: 8px;"><strong>📅 PERIGO AGENDADO:</strong></div>${gravesAntecipados}`;
+            if (gravesAtuais) htmlGrave += `<div style="margin-bottom: 8px; color: #ff3333;"><strong>🚨 PERIGO ATIVO:</strong></div>${gravesAtuais}`;
+            if (gravesAntecipados) htmlGrave += `<div style="margin-top: 12px; margin-bottom: 8px; color: #ff9999;"><strong>📅 PERIGO AGENDADO:</strong></div>${gravesAntecipados}`;
             blocoGraves.innerHTML = htmlGrave || "Nenhum alerta grave ativo.";
         }
 
     } catch (erro) {
-        console.error('Erro INMET:', erro);
+        console.error('Erro na API do INMET:', erro);
+        // Se quebrar, agora ele avisa claramente em vez de mascarar o erro
         if (blocoAlertas) {
-            blocoAlertas.innerHTML = `Nenhum alerta ativo para a região de ${cidadeUsuario} - ${estadoSigla}.`;
+            blocoAlertas.innerHTML = `<span style="color: #ff3333; font-size: 0.9em;">⚠️ Erro de conexão com o INMET. Tentando restabelecer...</span>`;
         }
     }
 }
