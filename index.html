@@ -263,7 +263,8 @@ async function buscarAlertasINMET() {
         if (respostaIp.ok) {
             const dadosIp = await respostaIp.json();
             if (dadosIp.success) {
-                estadoSigla = dadosIp.region_code || "PR";
+                // Força a sigla a ficar em MAIÚSCULO para bater com o INMET
+                estadoSigla = (dadosIp.region_code || "PR").toUpperCase();
                 cidadeUsuario = dadosIp.city || "Curitiba";
             }
         }
@@ -276,10 +277,9 @@ async function buscarAlertasINMET() {
         }
     });
 
-    // 2. PUXA OS DADOS DO INMET VIA PROXY ALTERNATIVO (Mais estável e sem cache antigo)
+    // 2. PUXA OS DADOS DO INMET VIA PROXY
     try {
         const urlInmet = 'https://apiprevmet3.inmet.gov.br/aviso/ativo';
-        // Trocando para o proxy do cors-anywhere via espelho público ou adicionando timestamp para burlar cache bloqueado
         const respostaInmet = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlInmet)}&_=${Date.now()}`);
         
         if (!respostaInmet.ok) throw new Error('Erro na requisição');
@@ -300,8 +300,11 @@ async function buscarAlertasINMET() {
             alertasLista.forEach(aviso => {
                 if (!aviso || !aviso.estados) return;
 
-                // Filtra pelo estado detectado
-                if (aviso.estados.includes(estadoSigla)) {
+                // Transforma a lista de estados do INMET em maiúsculo para comparar sem erros
+                const estadosAviso = aviso.estados.toUpperCase();
+                const temNoEstado = estadosAviso.includes(estadoSigla);
+                
+                if (temNoEstado) {
                     const severidade = aviso.severidade || ""; 
                     const evento = aviso.evento || "Alerta";         
                     const risks = aviso.riscos || "Atenção aos riscos meteorológicos.";
@@ -321,8 +324,9 @@ async function buscarAlertasINMET() {
                     }
 
                     const ehFuturo = dataInicio > agora;
-                    const ehGrave = severidade.toLowerCase().includes('grande perigo') || 
-                                   (severidade.toLowerCase().includes('perigo') && !severidade.toLowerCase().includes('potencial'));
+                    const severidadeLower = severidade.toLowerCase();
+                    const ehGrave = severidadeLower.includes('grande perigo') || 
+                                   (severidadeLower.includes('perigo') && !severidadeLower.includes('potencial'));
 
                     if (ehGrave) {
                         if (ehFuturo) gravesAntecipados += formatoAlerta;
