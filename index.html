@@ -170,7 +170,62 @@
                 });
         }
         detectarLocalizacao();
+// ==========================================
+// CONEXÃO EM TEMPO REAL COM A NUVEM (FIREBASE)
+// ==========================================
+function escutarNuvemFirebase() {
+    const URL_FIREBASE = "https://central-de-alertas-26-default-rtdb.firebaseio.com/.json";
 
+    function puxarDados() {
+        fetch(URL_FIREBASE)
+            .then(res => {
+                if (!res.ok) throw new Error("Erro na rede");
+                return res.json();
+            })
+            .then(dados => {
+                if (!dados) return;
+
+                // 1. Atualiza o indicador de checagem no rodapé do site
+                const lblChecagem = document.getElementById('web-checagem');
+                if (lblChecagem) {
+                    lblChecagem.innerText = `Última checagem: Conectado (${new Date().toLocaleTimeString('pt-BR')})`;
+                }
+
+                // 2. Extrai os dados enviados pelo seu main.py
+                let alerta = dados.alerta_atual || dados;
+                
+                if (alerta && alerta.estado !== undefined) {
+                    const estadoNuvem = parseInt(alerta.estado);
+                    const mensagemNuvem = alerta.mensagem || "";
+                    const horarioAlerta = alerta.horario || alerta.horario_atualizacao || "--:--:--";
+
+                    // Se a nuvem tiver um estado diferente do que está na tela, atualiza!
+                    if (typeof estadoAtual !== 'undefined' && estadoNuvem !== estadoAtual) {
+                        processarMudancaEstado(estadoNuvem, mensagemNuvem, horarioAlerta);
+                    } else if (typeof estadoAtual === 'undefined') {
+                        // Caso a variável global tenha outro nome, executa direto
+                        processarMudancaEstado(estadoNuvem, mensagemNuvem, horarioAlerta);
+                    }
+                }
+            })
+            .catch(erro => {
+                console.error("Erro ao conectar com a nuvem Firebase:", erro);
+                const lblChecagem = document.getElementById('web-checagem');
+                if (lblChecagem) {
+                    lblChecagem.innerText = "Última checagem: Erro de conexão com a nuvem";
+                }
+            });
+    }
+
+    // Monitora a nuvem a cada 3 segundos
+    setInterval(puxarDados, 3000);
+    puxarDados(); // Executa a primeira vez de imediato
+}
+
+// Ativa a busca assim que a página carregar no PC
+window.addEventListener('DOMContentLoaded', () => {
+    escutarNuvemFirebase();
+});
         function adicionarAoHistorico(nomeAlerta, hora) {
             if (!hora || hora === "--:--:--") return;
             const registro = `🕒 ${hora} - ${nomeAlerta}`;
